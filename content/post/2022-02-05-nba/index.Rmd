@@ -1,0 +1,514 @@
+---
+title: "Visualización interactiva de datos - Estadísticas NBA"
+author: "Carlos"
+date: '2022-02-15'
+slug:  Visualización de datos interactiva de jugadores NBA
+categories: Visualización de datos
+tags:  
+- Visualización de datos interactiva
+- Regresión lineal
+---
+
+
+```{r include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(dbplyr)))
+suppressWarnings(suppressPackageStartupMessages(library(inspectdf)))
+suppressWarnings(suppressPackageStartupMessages(library(mvoutlier)))
+suppressWarnings(suppressPackageStartupMessages(library(foreign)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(DescTools)))
+suppressWarnings(suppressPackageStartupMessages(library(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(library(tidyr)))
+suppressWarnings(suppressPackageStartupMessages(library(tidyverse)))
+suppressWarnings(suppressPackageStartupMessages(library(Hmisc)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(skimr)))
+suppressWarnings(suppressPackageStartupMessages(library(nortest)))
+suppressWarnings(suppressPackageStartupMessages(library(lmtest)))
+suppressWarnings(suppressPackageStartupMessages(library(tseries)))
+suppressWarnings(suppressPackageStartupMessages(library(MASS)))
+suppressWarnings(suppressPackageStartupMessages(library(car)))
+suppressWarnings(suppressPackageStartupMessages(library(leaps)))
+suppressWarnings(suppressPackageStartupMessages(library(Metrics)))
+suppressWarnings(suppressPackageStartupMessages(library(carData)))
+suppressWarnings(suppressPackageStartupMessages(library(rpart)))
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(library(rcompanion)))
+suppressWarnings(suppressPackageStartupMessages(library(glmnet)))
+suppressWarnings(suppressPackageStartupMessages(library(boot)))
+suppressWarnings(suppressPackageStartupMessages(library(PerformanceAnalytics)))
+suppressWarnings(suppressPackageStartupMessages(library(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(library(corrr)))
+suppressWarnings(suppressPackageStartupMessages(library(lme4)))
+suppressWarnings(suppressPackageStartupMessages(library(Matrix)))
+suppressWarnings(suppressPackageStartupMessages(library(missForest)))
+suppressWarnings(suppressPackageStartupMessages(library(doParallel)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(DMwR2)))
+suppressWarnings(suppressPackageStartupMessages(library(sampling)))
+suppressWarnings(suppressPackageStartupMessages(library(mice)))
+suppressWarnings(suppressPackageStartupMessages(library(arules)))
+suppressWarnings(suppressPackageStartupMessages(library(codebook)))
+suppressWarnings(suppressPackageStartupMessages(library(DMwR)))
+suppressWarnings(suppressPackageStartupMessages(library(ROCR)))
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+suppressWarnings(suppressPackageStartupMessages(library(caret)))
+suppressWarnings(suppressPackageStartupMessages(library(C50)))
+suppressWarnings(suppressPackageStartupMessages(library(gmodels)))
+suppressWarnings(suppressPackageStartupMessages(library(keras)))
+suppressWarnings(suppressPackageStartupMessages(library(binda)))
+suppressWarnings(suppressPackageStartupMessages(library(arules)))
+suppressWarnings(suppressPackageStartupMessages(library(foreign)))
+suppressWarnings(suppressPackageStartupMessages(library(fastAdaboost)))
+suppressWarnings(suppressPackageStartupMessages(library(readxl)))
+suppressWarnings(suppressPackageStartupMessages(library(maxLik)))
+suppressWarnings(suppressPackageStartupMessages(library(plotly)))
+suppressWarnings(suppressPackageStartupMessages(library(gapminder)))
+suppressWarnings(suppressPackageStartupMessages(library(DT)))
+
+```
+
+# ¿Qué jugadores destacan en la NBA y en qué aspecto?
+
+La visualización de datos es una representación gráfica de un conjunto de datos con el fin de transmitir información de manera rápida y directa, logrando que los patrones, tendencias y datos atípicos se identifiquen con mayor facilidad. 
+
+En este caso, nos encontramos ante un conjunto de datos sobre las estadísticas de los jugadores NBA por partido en las temporadas comprendidas entre la 2017/2018 y la 2020/2021. De este modo, la visualización interactiva de datos resulta una herramienta adecuada para fijarnos en qué jugadores destacan y en qué estadísticas, así como las tendencias en las posiciones y/o la edad.
+
+![](images/stephen-curry-lebron-james.jpeg)
+```{r include=FALSE}
+library(readxl)
+library(tidyr)
+NBA_stats <- read.csv("D:/Carlos/Master-BIG-DATA/15- TFM/idea nba/NBA_stats.csv", encoding="UTF-8", stringsAsFactors=TRUE)
+salaries_2020_21_xls <- read_excel("D:/Carlos/Master-BIG-DATA/15- TFM/idea nba/salaries 2020 21.xls.xlsx")
+```
+
+
+```{r include=FALSE}
+NBA_stats = NBA_stats %>% dplyr::relocate("Year", .after = "Player")
+```
+
+
+```{r include=FALSE}
+NBA_stats$Pos = ifelse(str_starts(NBA_stats$Pos, "C"), "C", ifelse(str_starts(NBA_stats$Pos, "PF"), "PF", ifelse(str_starts(NBA_stats$Pos, "SF"), "SF", ifelse(str_starts(NBA_stats$Pos, "SG"), "SG", "PG"))))
+NBA_stats$Pos = as.factor(NBA_stats$Pos)
+```
+
+
+En primer lugar conviene presentar el conjunto de datos. Ya hemos mencionado que los datos abarcan las estadísticas por partido de los jugadores NBA entre la temporada 2017/2018 y la temporada 2019/2020, y en la siguiente tabla podrás buscar el jugador que desees y ordenar las columnas de manera descendiente o ascendente.
+También puedes mover las columnas juntando aquellas que quieras comparar, así como la posibilidad de descargarte los datos en el formato que desees.
+```{r echo=FALSE}
+nba= NBA_stats
+datatable(nba, extensions = c('Buttons', 'ColReorder', "FixedColumns"), filter = "top", options = list(colReorder = TRUE,  pageLength = 8, dom = 'Bfrtip', buttons = c('copy', 'csv', 'excel', 'pdf', 'print'), scrollX = TRUE, fixedColumns = list(leftColumns = 3)))
+```
+
+
+A continuación presentamos una manera alternativa para presentar los datos en una tabla, donde puedes buscar el jugador que desees pero en esta ocasión no aparecen todas las estadísticas de los jugadores sino que tienes que pulsar en uno o varios de ellos para que se desglosen. 
+```{r echo=FALSE}
+library(DT)
+nba = NBA_stats
+datatable(NBA_stats,  extensions = c('FixedColumns', 'ColReorder', 'FixedHeader', 'Responsive'), caption="Estadísticas jugadores NBA 2018-2021",  options = list(colReorder = TRUE, fixedHeader = TRUE,  pageLength = 8, scrollX = FALSE, fixedColumns = list(leftColumns = 3))) # Ojo. Se empieza a contar como número ID, por lo que la primera columna es la número 2. Ordenar año como segunda columna.
+```
+
+
+```{r filtro minutos, include=FALSE}
+NBA_stats$minutos.totales= NBA_stats$Games * NBA_stats$Minutes.Played
+NBA_stats = NBA_stats %>% dplyr::filter(minutos.totales>150)
+```
+En este punto es necesario comentar que hemos eliminado aquellos jugadores que no llegaron a disputar un total de 150 minutos en liga.
+
+A continuación podemos observar la relación entre el número de tiros de campo intentados y los puntos conseguidos, donde cada color representa la posición del jugador. También puedes situarte sobre cualquier punto para descubrir el jugador y la temporada.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+NBA_stats= NBA_stats %>% unite("jug.año",  c("Player", "Year"), sep= ";", remove = FALSE)
+
+plotly::plot_ly(data= NBA_stats, x= ~ Fields.Goal.Attempted, y= ~ Points, color= ~Pos, text= ~jug.año,  type="scatter")
+```
+
+Asimismo, puedes fijarte en la relación entre  el número de asistencias y las pérdidas de cada jugador
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_ly(data= NBA_stats, x= ~Turnovers, y= ~Assists, color = ~Pos, text = ~jug.año,  type="scatter")
+```
+
+
+```{r conversion estadisticas a 48 minutos, include=FALSE}
+#Ahora convertimos las estadísticas que se observan en la tabla a 48 minutos jugados.
+
+x48= as.data.frame(cbind(NBA_stats[c(1:8, 26:27)], sapply(NBA_stats[9:25], function(x) x/NBA_stats$Minutes.Played)))
+x48= as.data.frame(cbind(x48[1:10], sapply(x48[11:27], function(x) round(x*48, digits = 2))))
+```
+
+
+
+```{r include=FALSE}
+puntos.equipo = nba %>% group_by(Team) %>% dplyr::filter(Year==2021) %>% dplyr::summarise(sumatorio =sum(Points))
+
+nba= nba %>% unite("jug.punt",  c("Player", "Points"), sep= " ; ", remove = FALSE)
+
+library(ExcelFunctionsR)
+y.2021 = nba %>% dplyr::filter(Year==2021)
+y.2021 = VLOOKUP(y.2021, "Team", puntos.equipo, "Team", "sumatorio")
+
+#library(treemapify)
+#ggplot(y.2021, aes(area = sumatorio, fill = Team, label =Team, subgroup=Points)) +  geom_treemap() 
+```
+
+
+```{r include=FALSE}
+fig <- plot_ly(
+  type='treemap',
+  labels=x48$Team,
+  parents=x48$Team,
+  values= sum(x48$Points),
+  textinfo="label+value+percent parent+percent entry+percent root",
+  domain=list(column=0))
+
+fig <- fig %>% add_trace(
+  type='treemap',
+  branchvalues="total",
+  labels=x48$Player,
+  parents=x48$Points,
+  values=x48$Points,
+  textinfo="label+value+percent parent+percent entry",
+  domain=list(column=1))
+
+fig <- fig %>% layout(
+  grid=list(columns=2, rows=1),
+  margin=list(l=0, r=0, b=0, t=0))
+
+fig
+```
+
+
+En esta ocasión podemos advertir un *treemap*, donde el primer grupo es el más grande y corresponde a cada uno de los equipos ("TOT" son jugadores que cambiaron de equipo una vez iniciada la temporada. A medida que nos adentramos en cada equipo podemos ver que el tamaño de cada posición se corresponde con el porcentaje de puntos que dicha posición ha aportado sobre el total. 
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(treemap)
+library(d3treeR)
+p = treemap(y.2021, index = c("Team","Pos", "Points"),
+                              vSize ="Points",
+                               type = "index",
+                               force.print.labels = TRUE,
+                              palette = "Set2",
+             bg.labels=c("white"),
+            align.labels=list(
+              c("center", "center"), 
+              c("right", "bottom")))
+
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=TRUE}
+d3tree2(p, rootname = "Puntos equipos NBA 2021")
+```
+
+
+```{r eliminacion variables, include=FALSE}
+x48$Defensive.Rebounds= NULL
+x48$Team=NULL
+x48$Tm=NULL
+x48$Rank= NULL
+x48$Guaranteed=NULL
+x48$`Signed Using`=NULL
+
+```
+
+
+
+```{r include=FALSE}
+x48= as.data.table(x48)
+x48= x48[, porc.x3 := (X3.points.Field.Goal/X3.points.Field.Goal.Attempted)]
+x48= x48[, porc.x2 := (X2.points.Field.Goal/X2.points.Field.Goal.Attempted)]
+x48= x48[, porc.free.throw := (Free.Throws/Free.Throws.Attempted)]
+quantile(na.omit(x48$porc.x3))  # Posible valor a imputar para los que no lleguen al umbral de triples intentados
+```
+
+```{r los valores NA de % acierto son 0 en x48, include=FALSE}
+# Imputamos a 0 aquellos valores en los que el porcetaje sale NA debido a que el número de intentos era 0.
+x48$porc.x3[is.na(x48$porc.x3)]<- 0
+x48$porc.x2[is.na(x48$porc.x2)]<- 0
+x48$porc.free.throw[is.na(x48$porc.free.throw)]<-0
+```
+
+# Estadísticas ajustadas a 48 minutos de juego.
+
+```{r warning=FALSE, include=FALSE}
+x48$porc.x3= round(x48$porc.x3, 2)
+x48$porc.x2 = round(x48$porc.x2, 2)
+x48$porc.free.throw= round(x48$porc.free.throw, 2)
+```
+
+Ahora presentamos las estadísticas de los jugadores ajustadas a 48 minutos jugados. Óbservese que podemos filtrar jugadores estableciendo criterios en cada columna.
+```{r echo=FALSE}
+data48= x48[,c(2:27)]
+datatable(data48, extensions = "FixedColumns", caption="Estadísticas jugadores NBA 2018-2021",  filter = "top", options = list(pageLength = 8, scrollX = TRUE, fixedColumns = list(leftColumns = 3)) ) 
+data48 = NULL
+```
+
+Nuevamente, podemos fijarnos en la relación entre el número de tiros de campo intentados y los puntos conseguidos, esta vez ajustado a 48 minutos de juego. 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plotly::plot_ly(data= x48, x= ~ Fields.Goal.Attempted, y= ~ Points, color= ~Pos, text= ~jug.año, type="scatter")
+```
+
+
+Bajo el mismo ajuste, se presenta la relación entre  el número de asistencias y las pérdidas de cada jugador
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_ly(data= x48, x= ~Turnovers, y= ~Assists, color = ~Pos, text = ~jug.año,  type="scatter")
+```
+
+
+
+```{r triples y 1/8 cuantiles de triples, include=FALSE}
+x48$triples.intentados = x48$Games * x48$X3.points.Field.Goal.Attempted
+quantile(x48$triples.intentados, probs = seq(0,1, 1/8))
+```
+
+<!-- Hemos visto los cuantiles de 8 pisos en cuanto a triples intentados. Ahora, de manera arbitraria y para una mejor precisión en mco, decidimos imputar un valor de 0.3 en porcentaje de triples a todos aquellos jugadores que no hayan llegado a lanzar 41 triples en toda la temporada. -->
+ 
+
+```{r include=FALSE}
+# vamos a imputar un porcentaje de 0.3 en triples a todos aquellos jugadores que no hayan llegado a lanzar 41 triples en toda la temporada. 
+x48$porc.x3[x48$triples.intentados<42] <- 0.3
+```
+
+```{r include=FALSE}
+x48$Fields.Goal.Attempted= NULL
+x48$Fields.Goal= NULL
+x48$X3.points.Field.Goal.Attempted= NULL
+x48$X2.points.Field.Goal.Attempted= NULL
+```
+
+```{r simplificar posiciones: interiores y exteriores, error=TRUE, warning=FALSE, include=FALSE}
+x48 %>% dplyr::filter(Pos=="SF") %>% count()
+x48= as.data.table(x48)
+x48= x48%>% dplyr::mutate(posicion =ifelse(str_detect(Pos, "C") | str_detect(Pos, "PF") | str_starts(Pos, "SF"), "interior", "exterior"))
+x48$posicion= as.factor(x48$posicion)
+table(x48$posicion)
+```
+
+
+```{r include=FALSE}
+colnames(x48)
+colnames(x48) <- c("jug.año","jugador", "año", "Pos", "edad", "partidos", "minutos" ,"minutos.totales", "tiros_de_3_anotados", "tiros_de_2_anotados","tiros_libres_anotados","tiros_libres_intentados", "rebotes_ofensivos", "rebotes_totales", "asistencias", "robos", "tapones", "perdidas", "faltas_realizadas", "puntos", "porcentaje_de_3", "porcentaje_de_2", "porcentaje_tiro_libre", "triples.intentados", "posicion")
+x48$triples.intentados
+x48$minutos.totales
+```
+
+```{r warning=FALSE, include=FALSE}
+x48_interiores = x48 %>%dplyr::filter(posicion =="interior")
+x48_exteriores = x48 %>%dplyr::filter(posicion =="exterior")
+```
+
+
+<!-- Ahora presentamos un diagrama de barras. La función cross_plot es útil cuando tenemos una variable binaria y queremos ver su frecuencia relativa y absoluta-->
+```{r include=FALSE}
+cross_plot(data=x48, input=c("puntos"), target="posicion")
+```
+
+<!--Presentamos una tabla de contingencia. Útil cuando queremos ver la relación entre dos variables discretas -->
+
+```{r include=FALSE}
+x48$minutos.disc= arules::discretize(x48$minutos, categories= 2)
+
+
+y2018 = x48%>% dplyr::filter(año == 2018) 
+
+y2021 = x48%>% dplyr::filter(año == 2021) 
+
+
+xtabs(~ posicion + minutos.disc, data= y2018)
+xtabs(~ posicion + minutos.disc, data= y2021)
+
+```
+
+```{r warning=FALSE, include=FALSE}
+plotar(x48, target= "Pos", plot_type = "boxplot") 
+```
+
+
+
+Los siguientes gráficos sirven para ilustrar las diferencias de los estadísticos de acuerdo a la posición en la cancha y observar los valores individuales atípicos de cada posición.
+```{r echo=FALSE, warning=FALSE}
+# Añadir: % de 3, % de 2, tiros de 3 intentados.
+
+plots=plot_ly(  data = x48, x= ~Pos, y=~asistencias, type="box", color =~Pos, text=~jug.año  ) %>% 
+  add_trace(x= ~Pos,y= ~puntos,  type="box", color=~Pos, text=~jug.año)%>% add_trace(x= ~Pos,y= ~rebotes_totales,  type="box", color=~Pos, text=~jug.año)%>%
+  add_trace(x= ~Pos,y= ~robos,  type="box", color=~Pos, text=~jug.año)%>% add_trace(x= ~Pos,y= ~tapones,  type="box", color=~Pos, text=~jug.año)%>% add_trace(x= ~Pos,y= ~perdidas,  type="box", color=~Pos, text=~jug.año)
+ 
+plots= plots %>% layout(
+  title = "Diagrama de cajas por posición",
+  xaxis = list(domain = c(0.1, 1)),
+   yaxis = list(title = c("Asistencias","Puntos", "Rebotes totales", "Robos", "Tapones", "Perdidas")),
+  updatemenus = list(
+    list(
+      type = "buttons",
+      y = 1,
+      buttons = list(
+        
+        list(method = "restyle",
+             args = list("visible", c(rep(T,5), rep(F,25))),
+             label = "Asistencias"),
+        
+           list(method = "restyle",
+             args = list("visible", c(rep(F,5),rep(T,5), rep(F,20))),
+             label = "Puntos"),
+        
+           list(method = "restyle",
+             args = list("visible", c(rep(F,10),rep(T,5), rep(F,15))),
+             label = "Rebotes totales"),
+        
+           list(method = "restyle",
+             args = list("visible", c(rep(F,15),rep(T,5), rep(F,10))),
+             label = "Robos"),
+        
+        list(method = "restyle",
+             args = list("visible", c(rep(F,20),rep(T,5), rep(F,5))),
+             label = "Tapones"),
+        
+                list(method = "restyle",
+             args = list("visible", c(rep(F,25),rep(T,5))),
+             label = "Perdidas")))
+  ))
+plots    
+```
+
+
+Siguiendo con los gráficos de estadísticas ajustadas a partido completo, en esta ocasión se presenta un diagrama de dispersión entre los puntos y la edad del jugador, separado por colores de acuerdo a la posición ocupada.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_ly(  data = x48,  y = ~puntos,  x = ~edad,  type = "scatter",  color = ~Pos, showlegend= T, text = ~jug.año)
+```
+
+También podemos apreciar un diagrama de dispersión entre los puntos (recordemos: ajustados a 48 minutos de juego) y los minutos reales jugados. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_ly(  data = x48,  y = ~puntos,  x = ~minutos,  type = "scatter",  color = ~edad, showlegend= T, text = ~ paste(jug.año,"; edad =", edad, sep= ""))
+```
+
+A continuación se presenta un histograma para cada temporada donde se representan los minutos jugados en relación a si ocupan una posición de interior o exterior. El objetivo es ver si se observa algún cambio de tendencia en el reparto de minutos de acuerdo a la altura (fuertemente relacionado en si juegan dentro o fuera de la pintura) de los jugadores.
+```{r echo=FALSE}
+ggplot(x48, aes(x= minutos, fill= posicion))+
+  geom_histogram(binwidth =7) + 
+  xlab("Minutos jugados") + ylab("posicion")+
+  labs(fill="posicion")+
+  facet_wrap(~año )
+```
+
+
+
+# ¿Qué acciones explican mejor los minutos jugados?
+
+En los siguientes gráficos podemos apreciar las diferencias entre los estadísticos de los jugadores que más juegan y aquellos que juegan un menor número de minutos. Observamos que, en líneas generales, los estadísticos ajustados a 48 minutos de juego se asemejan bastante entre ambos grupos de jugadores.Este es el caso del porcentaje de tiros de 2, de robos, rebotes totales y tapones, incluso éste último la mediana es ligeramente superior para aquellos jugadores que menos juegan.
+
+Sin embargo, se aprecia una gran diferencia en el número de puntos, impulsado principalmente por 2 factores. Por un lado el mayor % de éxito en los triples y, por otro lado, un mayor número de lanzamientos, tanto en triples, como tiros de 2 e incluso en tiros libres. Otro factor en favor a los jugadores que más juegan es el hecho de tener un menor número de balones perdidos. 
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+#Es lo mismo que presentamos con el siguiente chunk, aunque éste último más ordenado.
+
+plotar(data=x48, input= "rebotes_totales" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "robos" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "tapones" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "perdidas" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "faltas_realizadas" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "puntos" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "porcentaje_de_3" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "porcentaje_de_2" ,target= "minutos.disc", plot_type = "boxplot")   
+plotar(data=x48, input= "porcentaje_tiro_libre" ,target= "minutos.disc", plot_type = "boxplot")  
+plotar(data=x48, input= "tiros_de_2_anotados" ,target= "minutos.disc", plot_type = "boxplot") 
+plotar(data=x48, input= "tiros_de_3_anotados" ,target= "minutos.disc", plot_type = "boxplot") 
+plotar(data=x48, input= "tiros_libres_anotados" ,target= "minutos.disc", plot_type = "boxplot") 
+par(mfrow=c(2,2))
+```
+ 
+```{r echo=FALSE, warning=FALSE}
+library(cowplot)
+a=ggplot(data = x48, aes(minutos.disc, rebotes_totales, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+b=ggplot(data = x48, aes(minutos.disc, robos, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+c=ggplot(data = x48, aes(minutos.disc, tapones, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+d=ggplot(data = x48, aes(minutos.disc, perdidas, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+
+e=ggplot(data = x48, aes(minutos.disc, faltas_realizadas, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+f=ggplot(data = x48, aes(minutos.disc, puntos, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+g=ggplot(data = x48, aes(minutos.disc, porcentaje_de_3, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+h=ggplot(data = x48, aes(minutos.disc, porcentaje_de_2, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+i=ggplot(data = x48, aes(minutos.disc, porcentaje_tiro_libre, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+j=ggplot(data = x48, aes(minutos.disc, tiros_de_2_anotados, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+k=ggplot(data = x48, aes(minutos.disc, tiros_de_3_anotados, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+l=ggplot(data = x48, aes(minutos.disc, tiros_libres_anotados, fill=minutos.disc)) +  geom_boxplot(alpha=0.3)+    theme(legend.position="none", axis.title.x = element_blank())
+
+plot_grid(a,b,c,d, ncol=2, nrow=2)
+plot_grid(e,f,g,h, ncol=2, nrow=2)
+plot_grid(i,j,k,l, ncol=2, nrow=2)
+
+```
+
+<!-- Igual que el chunk anterior pero con un código más sencillo y más limpio -->
+```{r include=FALSE}
+library(DataExplorer)
+plot_boxplot(x48, by="minutos.disc", ncol=2, nrow=2, ggtheme = theme_minimal())
+```
+
+<!--
+## Jugadores exteriores
+```{r echo=FALSE, warning=FALSE}
+x48 = x48 %>% relocate(minutos.totales, .after = posicion)
+mco_x48_ext = x48_exteriores[,7:24]
+mco_x48_ext$minutos.totales = NULL
+mco_x48_ext$triples.intentados = NULL
+mco_x48_ext$tiros_libres_intentados= NULL
+mco_x48_ext$rebotes_ofensivos=NULL
+mco_x48_ext$tiros_de_3_anotados=NULL
+mco_x48_ext$tiros_de_2_anotados=NULL
+mco_x48_ext$tiros_libres_anotados=NULL
+# Realizamos la regresión. Podemos incluir la edad?
+mco_x48_ext= lm(minutos~.,data = mco_x48_ext)
+summary(mco_x48_ext)
+```
+
+
+## Jugadores interiores
+```{r echo=FALSE, warning=FALSE}
+mco_x48_int = x48_interiores[,7:24]
+mco_x48_int$minutos.totales = NULL
+mco_x48_int$triples.intentados = NULL
+mco_x48_int$tiros_libres_intentados= NULL
+mco_x48_int$rebotes_ofensivos=NULL
+# Realizamos la regresión. Podemos incluir la edad?
+mco_x48_int= lm(minutos~.,data = mco_x48_int)
+summary(mco_x48_int)
+```
+¿podemos validar el modelo? 
+
+Para ello se deben cumplir algunos supuestos:
+
++ Distribución normal de los residuos, con media 0 y varianza 1.
+
++ Independencia o ausencia de autocorrelación.
+
++ Homocedasticidad. Se refiere a que la varianza de los residuos ha de ser constante.
+
++ No multicolinealidad. Es decir, no debe existir una relación de dependencia lineal fuerte entre varias variables explicativas.
+
+```{r eval=FALSE, include=FALSE}
+NBA_stats= spread(NBA_stats, key = "Year", value = "Points")
+```
+En primer lugar vamos a realizar el test de shapiro analizar si los residuos se distribuyen de manera normal (media 0 y varianza 1)
+```{r echo=FALSE}
+shapiro.test(mco_x48_ext$residuals)
+shapiro.test(mco_x48_int$residuals)
+```
+```{r include=FALSE}
+vif(mco_x48_ext)
+```
+
+Dado que p- valor es < 0.05, no podemos aceptar la Ho de distribución normal de los residuos y, por extensión, no podemos validar el modelo.
+Aún así, hay algunos elementos que no se ven recogidos como pueda ser el prestigio, la preferencia del entrenador hacia un sistema de juego que prima ciertas características concretas, la complementariedad con otros jugadores, razones extradeportivas, algunos valores intangibles como el liderazgo o el carisma o, incluso, algunos estadísticos que no tenemos recogidos en nuestra base de datos pero que sí existen, como por ejemplo el número de bloqueos que acaban en canasta, "bloqueos" en el rebote que acaban en rebote de compañero, el ratio +-, etc. 
+
+-->

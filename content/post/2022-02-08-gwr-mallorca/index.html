@@ -1,0 +1,261 @@
+---
+title: "Regresión Geográficamente ponderada: incendios forestales (en obras)"
+author: "Carlos Gallego"
+date: '2022-02-25'
+slug: Regresión Geográficamente ponderada - Cálculo de la extensión quemada en un incendio(en obras)
+categories:
+- Forest Fires Prediction
+- GWR
+tags:
+- Forest Fires Prediction
+- GWR
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+
+<!-- Cargamos el workspace generado anteriormente.-->
+<p>(En proceso)</p>
+<p>En esta entrada trataré de predecir la extensión del área quemada en un incendio mediante técnicas de regresión geográficamente ponderada (GWR) y Machine Learning (ML). Para ello se explotará una base de datos que contiene información sobre los incendios producidos en las Islas Baleares entre 2010 y 2019.</p>
+<p>La mayoría de los investigadores coinciden al recoger 3 grandes grupos de variables fundamentales para la predicción de incendios: los factores meteorológicos, los factores topográficos y los factores relativos a la combustión del lugar del incendio. Así, se usaran dichos factores para realizar nuestra predicción.</p>
+<p>La GWR captura la dependencia espacial en el análisis de regresión, evitando problemas estadísticos como parámetros inestables y pruebas de significancia poco confiables, además de brindar información sobre las relaciones espaciales entre las variables involucradas. Se trata de una técnica basada en la construcción de ecuaciones individuales mediante la incorporación de las variables dependiente y explicativas de las entidades que caen dentro del ancho de banda de cada entidad de destino . La forma y el tamaño del ancho de banda dependen de la entrada del usuario para los parámetros de:</p>
+<ul>
+<li><p>Tipo Kernel o núcleo: fijo o flexible</p></li>
+<li><p>Método de ancho de banda: Se puede especificar una distancia específica (kernel fijo) o una cantidad de vecinos específica (kernel flexible).</p></li>
+</ul>
+<p>Los modelos GWR han demostrado ser efectivos en aquellos análisis donde el coeficiente de las variables dependientes cambia de manera significativa en función de la distancia espacial entre las observaciones, aunque también tiene gran facilidad de caer en la multicolinealidad local. La multicolinealidad local, distinta de la multicolinealidad global, puede señalar problemas de ajuste en determinadas zonas, y se evalúa mediante los valores locales</p>
+<p>Observamos cuantos puntos tenemos para cada isla</p>
+<pre><code>## 
+## FORMENTERA      IBIZA   MALLORCA    MENORCA 
+##         40        194        558         56</code></pre>
+<pre><code>## 
+## FORMENTERA      IBIZA   MALLORCA    MENORCA 
+##         41        195        572         56</code></pre>
+<p>Es necesario mencionar que el análisis GWR se ha acotado para las observaciones de la isla de Mallorca. Ello se debe a que al tratarse de un análisis espacial donde el número de observaciones del resto de islas es claramente inferior, la búsqueda de un óptimo, tanto de ancho de banda fijo como flexible, resulta ineficaz.</p>
+<div id="búsqueda-del-menor-aicc" class="section level1">
+<h1>Búsqueda del menor AICc</h1>
+<p>No hay grandes diferencias en resultados cuando usamos un método de ancho fijo o flexible que par el mejor valor de AICc, aunque sí es cierto que el flexible funciona algo mejor.</p>
+<div id="regresión-ponderada-dt1" class="section level2">
+<h2>Regresión ponderada DT1</h2>
+<p>Los siguientes puntos reflejan los lugares en los que se produjo un incendio.
+<em>Convertir datos a datos espaciales</em>
+<img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<div id="ancho-de-banda-fijo" class="section level3">
+<h3>Ancho de banda fijo</h3>
+<p>En primer lugar buscamos el ancho de banda óptimo de Kernel usando validación cruzada</p>
+<p>Ajustamos al modelo GWR el ancho de banda fijo óptimo encontrado</p>
+<pre><code>## Call:
+## gwr(formula = ln_m2_TOTAL ~ TemperaturaMaxima + HumedadRelativa + 
+##     VelocidadViento + Afectacion_arbolada + Afectacion_no_arbolada + 
+##     Afectacion_agricola + AfectoEspacioProtegido_SI + DIAS_SIN_LLUVIA + 
+##     SubgrupoCausa_Incendio_intencionado + orientacion_norte + 
+##     orientacion_oeste + orientacion_este + viento_norte + viento_sur + 
+##     viento_oeste + viento_este, data = DT1_omit, coords = cbind(Coord_X, 
+##     Coord_Y), bandwidth = fbw_1, gweight = gwr.Gauss, hatmatrix = TRUE, 
+##     longlat = TRUE, se.fit = TRUE)
+## Kernel function: gwr.Gauss 
+## Fixed bandwidth: 11391.85 
+## Summary of GWR coefficient estimates at data points:
+##                                           Min.    1st Qu.     Median    3rd Qu.
+## X.Intercept.                         1.4430701  1.8039254  2.0722698  2.2561130
+## TemperaturaMaxima                    0.0276861  0.0345480  0.0408359  0.0454789
+## HumedadRelativa                     -0.0093958 -0.0078182 -0.0061294 -0.0051070
+## VelocidadViento                      0.0279667  0.0298933  0.0347068  0.0400128
+## Afectacion_arbolada                  3.4028887  3.4715377  3.6376743  3.8349279
+## Afectacion_no_arbolada               3.0511592  3.1265486  3.3011974  3.5185877
+## Afectacion_agricola                  1.7098529  1.8250339  2.0016396  2.1201963
+## AfectoEspacioProtegido_SI            0.8079459  0.8476983  0.9302746  1.0078611
+## DIAS_SIN_LLUVIA                      0.0095449  0.0113731  0.0140494  0.0167128
+## SubgrupoCausa_Incendio_intencionado  0.4107182  0.4575063  0.5366970  0.6116149
+## orientacion_norte                   -0.4187496 -0.3053207 -0.1114121  0.0336644
+## orientacion_oeste                   -0.3033304 -0.2582688 -0.1729333 -0.0591727
+## orientacion_este                    -0.6825128 -0.6460831 -0.5921352 -0.5427311
+## viento_norte                        -0.4361486 -0.3670400 -0.2158493 -0.0943167
+## viento_sur                          -0.0810547 -0.0308486  0.0309296  0.0866007
+## viento_oeste                         0.1185519  0.1793821  0.3263083  0.4667442
+## viento_este                          0.1913759  0.2229082  0.2494106  0.2786761
+##                                           Max.  Global
+## X.Intercept.                         2.5684061  2.0345
+## TemperaturaMaxima                    0.0547094  0.0407
+## HumedadRelativa                     -0.0034667 -0.0064
+## VelocidadViento                      0.0429132  0.0351
+## Afectacion_arbolada                  3.9657108  3.6546
+## Afectacion_no_arbolada               3.6255428  3.3237
+## Afectacion_agricola                  2.1595905  1.9782
+## AfectoEspacioProtegido_SI            1.0468199  0.9282
+## DIAS_SIN_LLUVIA                      0.0179306  0.0140
+## SubgrupoCausa_Incendio_intencionado  0.6607220  0.5423
+## orientacion_norte                    0.0767935 -0.1269
+## orientacion_oeste                    0.0193049 -0.1778
+## orientacion_este                    -0.4766465 -0.5931
+## viento_norte                        -0.0385884 -0.2304
+## viento_sur                           0.1310931  0.0312
+## viento_oeste                         0.5277620  0.3119
+## viento_este                          0.3196090  0.2507
+## Number of data points: 558 
+## Effective number of parameters (residual: 2traceS - traceS&#39;S): 31.57118 
+## Effective degrees of freedom (residual: 2traceS - traceS&#39;S): 526.4288 
+## Sigma (residual: 2traceS - traceS&#39;S): 2.053516 
+## Effective number of parameters (model: traceS): 25.21091 
+## Effective degrees of freedom (model: traceS): 532.7891 
+## Sigma (model: traceS): 2.041222 
+## Sigma (ML): 1.994577 
+## AICc (GWR p. 61, eq 2.33; p. 96, eq. 4.21): 2409.167 
+## AIC (GWR p. 96, eq. 4.22): 2379.268 
+## Residual sum of squares: 2219.912 
+## Quasi-global R2: 0.3097088</code></pre>
+</div>
+<div id="ancho-de-banda-variable" class="section level3">
+<h3>Ancho de banda variable</h3>
+<p>En primer lugar buscamos el ancho de banda óptimo de Kernel usando validación cruzada</p>
+</div>
+</div>
+</div>
+<div id="búsqueda-del-mayor-r2" class="section level1">
+<h1>Búsqueda del mayor R^2</h1>
+<div id="ancho-de-banda-fijo-1" class="section level2">
+<h2>Ancho de banda fijo</h2>
+<pre><code>## Call:
+## gwr(formula = ln_m2_TOTAL ~ TemperaturaMaxima + HumedadRelativa + 
+##     VelocidadViento + Afectacion_arbolada + Afectacion_no_arbolada + 
+##     Afectacion_agricola + AfectoEspacioProtegido_SI + DIAS_SIN_LLUVIA + 
+##     SubgrupoCausa_Incendio_intencionado + orientacion_norte + 
+##     orientacion_oeste + orientacion_este + viento_norte + viento_sur + 
+##     viento_oeste + viento_este, data = DT1_omit, coords = cbind(Coord_X, 
+##     Coord_Y), bandwidth = 990, gweight = gwr.Gauss, hatmatrix = TRUE, 
+##     longlat = TRUE, se.fit = TRUE)
+## Kernel function: gwr.Gauss 
+## Fixed bandwidth: 990 
+## Summary of GWR coefficient estimates at data points:
+##                                            Min.     1st Qu.      Median
+## X.Intercept.                        -16.6712020  -1.2619134   1.7973913
+## TemperaturaMaxima                    -0.8417385  -0.0238130   0.0476157
+## HumedadRelativa                      -0.2478339  -0.0288464  -0.0018326
+## VelocidadViento                      -0.5789812  -0.0261710   0.0217890
+## Afectacion_arbolada                  -5.0441669   2.1866063   3.2513749
+## Afectacion_no_arbolada               -6.2147438   1.7659072   2.9527183
+## Afectacion_agricola                  -9.2821742   0.7864871   1.9712579
+## AfectoEspacioProtegido_SI            -5.0319820   0.1657712   0.6880187
+## DIAS_SIN_LLUVIA                      -0.4728036  -0.0203377   0.0112908
+## SubgrupoCausa_Incendio_intencionado  -4.9237212  -0.4221706   0.2186023
+## orientacion_norte                   -11.8913480  -1.2837432   0.2006104
+## orientacion_oeste                    -8.2817832  -1.1228661  -0.0833132
+## orientacion_este                    -13.4987634  -1.7831504  -0.7041200
+## viento_norte                         -9.2485927  -1.4787163   0.1353564
+## viento_sur                           -5.8938160  -0.9413289   0.0321720
+## viento_oeste                        -13.7855747  -0.4975487   0.5457510
+## viento_este                          -6.1961687  -0.4366281   0.3291795
+##                                         3rd Qu.        Max.  Global
+## X.Intercept.                          4.6641149  36.2845834  2.0345
+## TemperaturaMaxima                     0.1266330   0.4664410  0.0407
+## HumedadRelativa                       0.0237733   0.1913384 -0.0064
+## VelocidadViento                       0.0735808   0.3707356  0.0351
+## Afectacion_arbolada                   4.6671967  22.0948434  3.6546
+## Afectacion_no_arbolada                4.3994443  19.3861072  3.3237
+## Afectacion_agricola                   3.6833443  19.3445677  1.9782
+## AfectoEspacioProtegido_SI             1.4953944   5.6048540  0.9282
+## DIAS_SIN_LLUVIA                       0.0376053   0.3037495  0.0140
+## SubgrupoCausa_Incendio_intencionado   1.1972691   7.1016714  0.5423
+## orientacion_norte                     1.2179427   9.2775405 -0.1269
+## orientacion_oeste                     1.1642598  12.0000701 -0.1778
+## orientacion_este                      0.3421934   9.1340940 -0.5931
+## viento_norte                          1.0096786   6.8242198 -0.2304
+## viento_sur                            1.0410237   6.3401112  0.0312
+## viento_oeste                          1.4034616   7.9533711  0.3119
+## viento_este                           1.4622002   9.7962547  0.2507
+## Number of data points: 558 
+## Effective number of parameters (residual: 2traceS - traceS&#39;S): 493.175 
+## Effective degrees of freedom (residual: 2traceS - traceS&#39;S): 64.82496 
+## Sigma (residual: 2traceS - traceS&#39;S): 2.061768 
+## Effective number of parameters (model: traceS): 449.2018 
+## Effective degrees of freedom (model: traceS): 108.7982 
+## Sigma (model: traceS): 1.591476 
+## Sigma (ML): 0.7027388 
+## AICc (GWR p. 61, eq 2.33; p. 96, eq. 4.21): 5894.279 
+## AIC (GWR p. 96, eq. 4.22): 1639.046 
+## Residual sum of squares: 275.5637 
+## Quasi-global R2: 0.9143123</code></pre>
+</div>
+<div id="ancho-de-banda-variable-1" class="section level2">
+<h2>Ancho de banda variable</h2>
+<pre><code>## Call:
+## gwr(formula = ln_m2_TOTAL ~ TemperaturaMaxima + HumedadRelativa + 
+##     VelocidadViento + Afectacion_arbolada + Afectacion_no_arbolada + 
+##     Afectacion_agricola + AfectoEspacioProtegido_SI + DIAS_SIN_LLUVIA + 
+##     SubgrupoCausa_Incendio_intencionado + orientacion_norte + 
+##     orientacion_oeste + orientacion_este + viento_norte + viento_sur + 
+##     viento_oeste + viento_este, data = DT1_omit, coords = cbind(Coord_X, 
+##     Coord_Y), adapt = 0.15, hatmatrix = TRUE, se.fit = TRUE)
+## Kernel function: gwr.Gauss 
+## Adaptive quantile: 0.15 (about 83 of 558 data points)
+## Summary of GWR coefficient estimates at data points:
+##                                            Min.     1st Qu.      Median
+## X.Intercept.                        -2.98525210  1.15131902  2.34220206
+## TemperaturaMaxima                   -0.02396546  0.01560566  0.04809562
+## HumedadRelativa                     -0.02401363 -0.01589420 -0.00649914
+## VelocidadViento                      0.01137066  0.02954254  0.03551011
+## Afectacion_arbolada                  1.34290294  2.85228605  3.25709504
+## Afectacion_no_arbolada               2.75191395  2.95980234  3.16740880
+## Afectacion_agricola                  0.56324246  1.54220314  1.80530368
+## AfectoEspacioProtegido_SI            0.12035267  0.45205804  0.77098109
+## DIAS_SIN_LLUVIA                     -0.00015043  0.00317650  0.01452746
+## SubgrupoCausa_Incendio_intencionado  0.17203097  0.36103096  0.43978140
+## orientacion_norte                   -2.55181802 -1.02998790 -0.58193601
+## orientacion_oeste                   -0.78361524 -0.52416061 -0.39789909
+## orientacion_este                    -1.06370487 -0.85710329 -0.70335169
+## viento_norte                        -1.13836119 -0.45806276 -0.33387116
+## viento_sur                          -0.78576150 -0.23056863 -0.04636657
+## viento_oeste                        -0.15427567  0.09032063  0.25582588
+## viento_este                         -0.29714974  0.03550118  0.27256443
+##                                         3rd Qu.        Max.  Global
+## X.Intercept.                         3.63923223  5.03829959  2.0345
+## TemperaturaMaxima                    0.06444460  0.09010782  0.0407
+## HumedadRelativa                      0.00751003  0.01448164 -0.0064
+## VelocidadViento                      0.04731673  0.06751968  0.0351
+## Afectacion_arbolada                  4.17127460  4.82180483  3.6546
+## Afectacion_no_arbolada               3.50483873  4.27667595  3.3237
+## Afectacion_agricola                  2.06509257  2.71727471  1.9782
+## AfectoEspacioProtegido_SI            1.19348338  1.50785322  0.9282
+## DIAS_SIN_LLUVIA                      0.01935699  0.04847522  0.0140
+## SubgrupoCausa_Incendio_intencionado  0.66707346  1.06883771  0.5423
+## orientacion_norte                    0.03927096  1.19395932 -0.1269
+## orientacion_oeste                   -0.26255199  1.14884676 -0.1778
+## orientacion_este                    -0.32676890  2.63325689 -0.5931
+## viento_norte                        -0.15993800  0.08609948 -0.2304
+## viento_sur                           0.02068124  0.18264804  0.0312
+## viento_oeste                         0.75525583  1.52561837  0.3119
+## viento_este                          0.53703745  1.02764820  0.2507
+## Number of data points: 558 
+## Effective number of parameters (residual: 2traceS - traceS&#39;S): 83.00718 
+## Effective degrees of freedom (residual: 2traceS - traceS&#39;S): 474.9928 
+## Sigma (residual: 2traceS - traceS&#39;S): 1.959236 
+## Effective number of parameters (model: traceS): 62.69975 
+## Effective degrees of freedom (model: traceS): 495.3002 
+## Sigma (model: traceS): 1.918651 
+## Sigma (ML): 1.807645 
+## AICc (GWR p. 61, eq 2.33; p. 96, eq. 4.21): 2388.344 
+## AIC (GWR p. 96, eq. 4.22): 2306.935 
+## Residual sum of squares: 1823.31 
+## Quasi-global R2: 0.4330339</code></pre>
+</div>
+</div>
+<div id="representación-de-residuos" class="section level1">
+<h1>Representación de residuos</h1>
+<p>Recordemos que el modelo que mejor funcionaba para un mejor valor de AICc era un ancho de banda flexible, mientras que el modelo que funcionaba mejor para la optimización del R2 era un ancho de banda fijo.</p>
+<div id="mapa-de-residuos-del-mejor-modelo-bajo-criterio-aicc" class="section level2">
+<h2>Mapa de residuos del mejor modelo bajo criterio AICc</h2>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-16-1.png" width="672" /></p>
+</div>
+<div id="mapa-de-residuos-del-mejor-modelo-bajo-criterio-r2" class="section level2">
+<h2>Mapa de residuos del mejor modelo bajo criterio R^2</h2>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-17-1.png" width="672" /></p>
+</div>
+</div>
+<div id="representación-r2" class="section level1">
+<h1>Representación R2</h1>
+<div id="mapa-de-r2-del-mejor-modelo-bajo-criterio-r2" class="section level2">
+<h2>Mapa de R2 del mejor modelo bajo criterio R^2</h2>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-18-1.png" width="672" /></p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-19-1.png" width="672" /></p>
+</div>
+</div>

@@ -1,0 +1,312 @@
+---
+title: "GWR: incendios forestales (en obras)"
+author: "Carlos Gallego"
+date: '2022-02-25'
+slug: GWR: incendios forestales (en obras
+categories:
+- Forest Fires Prediction
+- GWR
+tags:
+- Forest Fires Prediction
+- GWR
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	cache = TRUE,
+	echo = FALSE
+)
+```
+
+
+```{r include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(dbplyr)))
+suppressWarnings(suppressPackageStartupMessages(library(inspectdf)))
+suppressWarnings(suppressPackageStartupMessages(library(mvoutlier)))
+suppressWarnings(suppressPackageStartupMessages(library(foreign)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(DescTools)))
+suppressWarnings(suppressPackageStartupMessages(library(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(library(tidyr)))
+suppressWarnings(suppressPackageStartupMessages(library(tidyverse)))
+suppressWarnings(suppressPackageStartupMessages(library(Hmisc)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(skimr)))
+suppressWarnings(suppressPackageStartupMessages(library(nortest)))
+suppressWarnings(suppressPackageStartupMessages(library(lmtest)))
+suppressWarnings(suppressPackageStartupMessages(library(tseries)))
+suppressWarnings(suppressPackageStartupMessages(library(MASS)))
+suppressWarnings(suppressPackageStartupMessages(library(car)))
+suppressWarnings(suppressPackageStartupMessages(library(leaps)))
+suppressWarnings(suppressPackageStartupMessages(library(Metrics)))
+suppressWarnings(suppressPackageStartupMessages(library(carData)))
+suppressWarnings(suppressPackageStartupMessages(library(rpart)))
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(library(rcompanion)))
+suppressWarnings(suppressPackageStartupMessages(library(glmnet)))
+suppressWarnings(suppressPackageStartupMessages(library(boot)))
+suppressWarnings(suppressPackageStartupMessages(library(PerformanceAnalytics)))
+suppressWarnings(suppressPackageStartupMessages(library(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(library(corrr)))
+suppressWarnings(suppressPackageStartupMessages(library(lme4)))
+suppressWarnings(suppressPackageStartupMessages(library(Matrix)))
+suppressWarnings(suppressPackageStartupMessages(library(missForest)))
+suppressWarnings(suppressPackageStartupMessages(library(doParallel)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(DMwR2)))
+suppressWarnings(suppressPackageStartupMessages(library(sampling)))
+suppressWarnings(suppressPackageStartupMessages(library(mice)))
+suppressWarnings(suppressPackageStartupMessages(library(arules)))
+suppressWarnings(suppressPackageStartupMessages(library(codebook)))
+##suppressWarnings(suppressPackageStartupMessages(library(DMwR)))
+suppressWarnings(suppressPackageStartupMessages(library(ROCR)))
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+suppressWarnings(suppressPackageStartupMessages(library(caret)))
+##suppressWarnings(suppressPackageStartupMessages(library(CHAID)))
+suppressWarnings(suppressPackageStartupMessages(library(C50)))
+suppressWarnings(suppressPackageStartupMessages(library(gmodels)))
+suppressWarnings(suppressPackageStartupMessages(library(keras)))
+suppressWarnings(suppressPackageStartupMessages(library(binda)))
+suppressWarnings(suppressPackageStartupMessages(library(arules)))
+suppressWarnings(suppressPackageStartupMessages(library(foreign)))
+suppressWarnings(suppressPackageStartupMessages(library(fastAdaboost)))
+suppressWarnings(suppressPackageStartupMessages(library(maxLik)))
+suppressWarnings(suppressPackageStartupMessages(library(rpact)))
+suppressWarnings(suppressPackageStartupMessages(library(formattable)))
+suppressWarnings(suppressPackageStartupMessages(library(kableExtra)))
+suppressWarnings(suppressPackageStartupMessages(library(maptools)))
+suppressWarnings(suppressPackageStartupMessages(library(texreg)))
+suppressWarnings(suppressPackageStartupMessages(library(spgwr)))
+suppressWarnings(suppressPackageStartupMessages(library(sp)))
+suppressWarnings(suppressPackageStartupMessages(library(fastDummies)))
+
+```
+
+
+<!-- Cargamos el workspace generado anteriormente.-->
+```{r include=FALSE}
+load("D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/workspace-preprocesado.RData")
+```
+
+(En proceso)
+
+En esta entrada trataré de predecir la extensión del área quemada en un incendio mediante técnicas de regresión geográficamente ponderada (GWR) y Machine Learning (ML). Para ello se explotará una base de datos que contiene información sobre los incendios producidos en las Islas Baleares entre 2010 y 2019.
+
+La mayoría de los investigadores coinciden al recoger 3 grandes grupos de variables fundamentales para la predicción de incendios: los factores meteorológicos, los factores topográficos y los factores relativos a la combustión del lugar del incendio. Así, se usaran dichos factores para realizar nuestra predicción.
+
+La GWR captura la dependencia espacial en el análisis de regresión, evitando problemas estadísticos como parámetros inestables y pruebas de significancia poco confiables, además de brindar información sobre las relaciones espaciales entre las variables involucradas. Se trata de una técnica basada en la construcción de ecuaciones individuales mediante la incorporación de las variables dependiente y explicativas de las entidades que caen dentro del ancho de banda de cada entidad de destino . La forma y el tamaño del ancho de banda dependen de la entrada del usuario para los parámetros de:
+
+-	Tipo Kernel o núcleo: fijo o flexible
+
+-	Método de ancho de banda: Se puede especificar una distancia específica (kernel fijo) o una cantidad de vecinos específica (kernel flexible). 
+
+Los modelos GWR han demostrado ser efectivos en aquellos análisis donde el coeficiente de las variables dependientes cambia de manera significativa en función de la distancia espacial entre las observaciones, aunque también tiene gran facilidad de caer en la multicolinealidad local. La multicolinealidad local, distinta de la multicolinealidad global, puede señalar problemas de ajuste en determinadas zonas, y se evalúa mediante los valores locales
+
+
+
+Observamos cuantos puntos tenemos para cada isla
+```{r echo=FALSE}
+table(DT1_omit$Comarca)
+table(DT3_omit$Comarca)
+```
+
+
+
+```{r include=FALSE}
+DT1 = dummy_cols(DT1, select_columns = c("AfectoEspacioProtegido", "Sup_Autoregulada_Autogenerable"), remove_selected_columns = TRUE, remove_first_dummy = T)
+```
+
+Es necesario mencionar que el análisis GWR se ha acotado para las observaciones de la isla de Mallorca. Ello se debe a que al tratarse de un análisis espacial donde el número de observaciones del resto de islas es claramente inferior, la búsqueda de un óptimo, tanto de ancho de banda fijo como flexible, resulta ineficaz.   
+```{r include=FALSE}
+DT1 = DT1 %>% dplyr::filter(Comarca == "MALLORCA")
+DT1_omit = na.omit(DT1)
+```
+
+
+```{r include=FALSE}
+DT1= DT1 %>% dplyr::select(-Id_Pif, - Comarca)
+
+DT1_omit= DT1_omit %>% dplyr::select(-Id_Pif, - Comarca)
+```
+
+
+# Búsqueda del menor AICc
+
+No hay grandes diferencias en resultados cuando usamos un método de ancho fijo o flexible que par el mejor valor de AICc, aunque sí es cierto que el flexible funciona algo mejor.
+
+## Regresión ponderada DT1 
+
+Los siguientes puntos reflejan los lugares en los que se produjo un incendio.
+*Convertir datos a datos espaciales*
+```{r echo=FALSE}
+library(sp)
+
+##Antes debemos eliminar los datos faltantes.
+
+coordinates(DT1_omit) <- c("Coord_X", "Coord_Y")
+plot(DT1_omit)
+```
+
+
+### Ancho de banda fijo
+
+En primer lugar buscamos el ancho de banda óptimo de Kernel usando validación cruzada
+```{r include=FALSE}
+fbw_1 <- gwr.sel(ln_m2_TOTAL ~ TemperaturaMaxima+HumedadRelativa+	VelocidadViento	+	Afectacion_arbolada+	Afectacion_no_arbolada+	Afectacion_agricola+	AfectoEspacioProtegido_SI+		DIAS_SIN_LLUVIA+				SubgrupoCausa_Incendio_intencionado+		orientacion_norte+	orientacion_oeste+	orientacion_este+	viento_norte+	viento_sur+	viento_oeste+	viento_este, data=DT1_omit, coords=cbind(Coord_X, Coord_Y), longlat = TRUE,
+               adapt=FALSE, 
+               gweight = gwr.Gauss, 
+               verbose = FALSE)
+
+fbw_1
+```
+
+
+Ajustamos al modelo GWR el ancho de banda fijo óptimo encontrado
+```{r echo=FALSE}
+## fit a gwr based on fixed bandwidth
+fb_gwr_1 <- gwr(ln_m2_TOTAL ~ TemperaturaMaxima+HumedadRelativa+	VelocidadViento	+	Afectacion_arbolada+	Afectacion_no_arbolada+	Afectacion_agricola+	AfectoEspacioProtegido_SI+		DIAS_SIN_LLUVIA+				SubgrupoCausa_Incendio_intencionado+		orientacion_norte+	orientacion_oeste+	orientacion_este+	viento_norte+	viento_sur+	viento_oeste+	viento_este, data=DT1_omit, coords=cbind(Coord_X, Coord_Y),  longlat = TRUE,
+            bandwidth = fbw_1, 
+            gweight = gwr.Gauss,
+            hatmatrix=TRUE, 
+            se.fit=TRUE)
+
+fb_gwr_1
+##saveRDS(fb_gwr_1, "D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/resultados/fb_gwr_1")
+```
+
+
+```{r include=FALSE}
+## write gwr output into a data frame
+fb_gwr_1_out <- as.data.frame(fb_gwr_1$SDF)
+
+DT1_omit$fmb_localR2 <- fb_gwr_1_out$localR2
+
+##saveRDS(, "D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/resultados/fb_gwr_1_out.rds")
+```
+
+### Ancho de banda variable
+
+En primer lugar buscamos el ancho de banda óptimo de Kernel usando validación cruzada
+
+```{r include=FALSE}
+library(spgwr)
+GWRbandwidth <- gwr.sel(ln_m2_TOTAL ~ TemperaturaMaxima+HumedadRelativa+	VelocidadViento	+	Afectacion_arbolada+	Afectacion_no_arbolada+	Afectacion_agricola+	AfectoEspacioProtegido_SI +		DIAS_SIN_LLUVIA+				SubgrupoCausa_Incendio_intencionado+		orientacion_norte+	orientacion_oeste+	orientacion_este+	viento_norte+	viento_sur+	viento_oeste+	viento_este, data=DT1_omit, coords=cbind(Coord_X, Coord_Y),adapt=T) 
+
+```
+
+
+
+```{r include=FALSE}
+##run the gwr model
+ab_gwr_1 = gwr(ln_m2_TOTAL ~ TemperaturaMaxima+HumedadRelativa+	VelocidadViento	+	Afectacion_arbolada+	Afectacion_no_arbolada+	Afectacion_agricola+	AfectoEspacioProtegido_SI + DIAS_SIN_LLUVIA+				SubgrupoCausa_Incendio_intencionado+		orientacion_norte+	orientacion_oeste+	orientacion_este+	viento_norte+	viento_sur+	viento_oeste+	viento_este, data=DT1_omit, coords=cbind(Coord_X, Coord_Y),adapt=GWRbandwidth, 
+                    hatmatrix=TRUE, 
+                    se.fit=TRUE) 
+##print the results of the model
+ab_gwr_1
+
+##saveRDS(ab_gwr_1, "D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/resultados/ab_gwr_1.rds")
+```
+
+
+# Búsqueda del mayor R^2
+
+
+
+## Ancho de banda fijo
+
+
+```{r}
+## fit a gwr based on fixed bandwidth
+fb_gwr_R2_1 <- gwr(ln_m2_TOTAL ~ TemperaturaMaxima+HumedadRelativa+	VelocidadViento	+	Afectacion_arbolada+	Afectacion_no_arbolada+	Afectacion_agricola+	AfectoEspacioProtegido_SI+		DIAS_SIN_LLUVIA+				SubgrupoCausa_Incendio_intencionado+		orientacion_norte+	orientacion_oeste+	orientacion_este+	viento_norte+	viento_sur+	viento_oeste+	viento_este, data=DT1_omit, coords=cbind(Coord_X, Coord_Y),  longlat = TRUE,
+            bandwidth = 990,
+            gweight = gwr.Gauss,
+            hatmatrix=TRUE, 
+            se.fit=TRUE)
+
+fb_gwr_R2_1
+##saveRDS(fb_gwr_R2_1, "D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/resultados/fb_gwr_R2_1")
+```
+
+
+```{r}
+## write gwr output into a data frame
+fb_gwr_R2_1_out <- as.data.frame(fb_gwr_R2_1$SDF)
+
+DT1_omit$fmb_localR2 <- fb_gwr_R2_1_out$localR2
+
+##saveRDS(, "D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/resultados/fb_gwr_R2_1_out.rds")
+```
+
+## Ancho de banda variable
+
+
+
+```{r}
+##run the gwr model
+ab_gwr_R2_1 = gwr(ln_m2_TOTAL ~ TemperaturaMaxima+HumedadRelativa+	VelocidadViento	+	Afectacion_arbolada+	Afectacion_no_arbolada+	Afectacion_agricola+	AfectoEspacioProtegido_SI + DIAS_SIN_LLUVIA+				SubgrupoCausa_Incendio_intencionado+		orientacion_norte+	orientacion_oeste+	orientacion_este+	viento_norte+	viento_sur+	viento_oeste+	viento_este, data=DT1_omit, coords=cbind(Coord_X, Coord_Y),adapt=0.15, 
+                    hatmatrix=TRUE, 
+                    se.fit=TRUE) 
+##print the results of the model
+ab_gwr_R2_1
+
+##saveRDS(ab_gwr_R2_1, "D:/Carlos/Master-BIG-DATA/15- TFM/Idea incendis/resultados/ab_gwr_R2_1.rds")
+```
+
+
+# Representación de residuos
+
+Recordemos que el modelo que mejor funcionaba para un mejor valor de AICc era un ancho de banda flexible, mientras que el modelo que funcionaba mejor para la optimización del R2 era un ancho de banda fijo.
+
+## Mapa de residuos del mejor modelo bajo criterio AICc
+
+```{r}
+x= DT1_omit$Coord_X
+y= DT1_omit$Coord_Y
+resids = ab_gwr_1[["lm"]][["residuals"]]
+z= data.frame(resids)
+map.resids <- SpatialPointsDataFrame(data=z, coords=cbind(x, y)) 
+colfunc <- colorRampPalette(c("darkblue","royalblue","green","royalblue", "darkblue"))
+spplot(map.resids, cuts=quantile(resids, probs = seq(0, 1, 1/5)), col.regions= colfunc(55))
+
+```
+
+## Mapa de residuos del mejor modelo bajo criterio R^2
+
+```{r message=FALSE, warning=FALSE}
+x= DT1_omit$Coord_X
+y= DT1_omit$Coord_Y
+resids = fb_gwr_R2_1[["lm"]][["residuals"]]
+z= data.frame(resids)
+map.resids <- SpatialPointsDataFrame(data=z, coords=cbind(x, y)) 
+colfunc <- colorRampPalette(c("darkblue","royalblue","green","royalblue", "darkblue"))
+spplot(map.resids, cuts=quantile(resids, probs = seq(0, 1, 1/5)), col.regions= colfunc(55))
+
+```
+
+# Representación R2 
+
+## Mapa de R2 del mejor modelo bajo criterio R^2
+```{r}
+x= DT1_omit$Coord_X
+y= DT1_omit$Coord_Y
+localR2 = fb_gwr_R2_1$SDF$localR2
+z= data.frame(localR2)
+map.resids <- SpatialPointsDataFrame(data=z, coords=cbind(x, y)) 
+colfunc <- colorRampPalette(c("darkred","red" ,"royalblue", "darkgreen", "green"))
+spplot(map.resids, cuts=quantile(localR2, probs = seq(0, 1, 1/5)), col.regions= colfunc(55))
+```
+
+
+
+```{r echo=FALSE}
+x= DT1_omit$Coord_X
+y= DT1_omit$Coord_Y
+localR2 = ab_gwr_1$SDF$localR2
+z= data.frame(localR2)
+map.resids <- SpatialPointsDataFrame(data=z, coords=cbind(x, y)) 
+colfunc <- colorRampPalette(c("darkred","red" ,"royalblue", "darkgreen", "green"))
+spplot(map.resids, cuts=quantile(localR2, probs = seq(0, 1, 1/5)), col.regions= colfunc(55))
+```
+

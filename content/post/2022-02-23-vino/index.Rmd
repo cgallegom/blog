@@ -1,0 +1,722 @@
+---
+title: "Machine Learning: clasificación de vino"
+author: "Carlos Gallego"
+date: '2022-02-27'
+slug: 'ML'
+categories:
+  - clasificacion
+tags: 
+  - clasificacion
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning=FALSE,cache =  T)
+```
+
+```{r include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(library(dbplyr)))
+suppressWarnings(suppressPackageStartupMessages(library(inspectdf)))
+suppressWarnings(suppressPackageStartupMessages(library(mvoutlier)))
+suppressWarnings(suppressPackageStartupMessages(library(foreign)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(DescTools)))
+suppressWarnings(suppressPackageStartupMessages(library(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(library(tidyr)))
+suppressWarnings(suppressPackageStartupMessages(library(tidyverse)))
+suppressWarnings(suppressPackageStartupMessages(library(Hmisc)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(skimr)))
+suppressWarnings(suppressPackageStartupMessages(library(nortest)))
+suppressWarnings(suppressPackageStartupMessages(library(lmtest)))
+suppressWarnings(suppressPackageStartupMessages(library(tseries)))
+suppressWarnings(suppressPackageStartupMessages(library(MASS)))
+suppressWarnings(suppressPackageStartupMessages(library(car)))
+suppressWarnings(suppressPackageStartupMessages(library(leaps)))
+suppressWarnings(suppressPackageStartupMessages(library(Metrics)))
+suppressWarnings(suppressPackageStartupMessages(library(carData)))
+suppressWarnings(suppressPackageStartupMessages(library(rpart)))
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(library(rcompanion)))
+suppressWarnings(suppressPackageStartupMessages(library(glmnet)))
+suppressWarnings(suppressPackageStartupMessages(library(boot)))
+suppressWarnings(suppressPackageStartupMessages(library(PerformanceAnalytics)))
+suppressWarnings(suppressPackageStartupMessages(library(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(library(corrr)))
+suppressWarnings(suppressPackageStartupMessages(library(lme4)))
+suppressWarnings(suppressPackageStartupMessages(library(Matrix)))
+suppressWarnings(suppressPackageStartupMessages(library(missForest)))
+suppressWarnings(suppressPackageStartupMessages(library(doParallel)))
+suppressWarnings(suppressPackageStartupMessages(library(funModeling)))
+suppressWarnings(suppressPackageStartupMessages(library(DMwR2)))
+suppressWarnings(suppressPackageStartupMessages(library(sampling)))
+suppressWarnings(suppressPackageStartupMessages(library(mice)))
+suppressWarnings(suppressPackageStartupMessages(library(arules)))
+suppressWarnings(suppressPackageStartupMessages(library(codebook)))
+suppressWarnings(suppressPackageStartupMessages(library(DMwR)))
+suppressWarnings(suppressPackageStartupMessages(library(ROCR)))
+suppressWarnings(suppressPackageStartupMessages(library(pROC)))
+suppressWarnings(suppressPackageStartupMessages(library(caret)))
+suppressWarnings(suppressPackageStartupMessages(library(C50)))
+suppressWarnings(suppressPackageStartupMessages(library(gmodels)))
+suppressWarnings(suppressPackageStartupMessages(library(keras)))
+suppressWarnings(suppressPackageStartupMessages(library(binda)))
+suppressWarnings(suppressPackageStartupMessages(library(arules)))
+suppressWarnings(suppressPackageStartupMessages(library(foreign)))
+suppressWarnings(suppressPackageStartupMessages(library(fastAdaboost)))
+suppressWarnings(suppressPackageStartupMessages(library(readxl)))
+suppressWarnings(suppressPackageStartupMessages(library(maxLik)))
+suppressWarnings(suppressPackageStartupMessages(library(plotly)))
+suppressWarnings(suppressPackageStartupMessages(library(gapminder)))
+suppressWarnings(suppressPackageStartupMessages(library(DT)))
+
+```
+
+
+# ¿Puedes distinguir los vinos blancos de los vinos tintos en una cata a ciegas? ¿Estás seguro? 😏
+
+Obviamente existen diferencias notorias entre ambos tipos de vino y, aún sin ser un sommelier, podrías distinguirlos fácilmente. La cuestión es con qué **porcentaje de acierto** podrías hacerlo. Y es que la prueba se complicaría si nos dieran a probar vinos blancos con características de tintos y viceversa. Sin embargo, existen técnicas de machine learning que permiten que una máquina o un algoritmo clasifique el vino en blanco o tinto, con un porcentaje de acierto muy cercano al 100%. ¡Vamos a verlo!
+
+![](images/destacada-nota-vino.jpg)
+
+El concepto de aprendizaje automático, comunmente conocido como *machine learning*, se refiere al conjunto de algoritmos que nos permiten identificar patrones presentes en los datos y crear estructuras (modelos) que los representen con ellos. Una vez generados, los modelos se pueden utilizar para realizar predicciones. Es importante mencionar que los sistemas de aprendizaje automático solo pueden almacenar patrones presentes en los datos con los que están entrenados, por lo que solo pueden reconocer lo que han visto antes. 
+
+Los algoritmos de dichas predicciones pueden ser distintos dependiendo de si estamos ante un problema de **clasificación**, donde el resultado es una clase con un número limitado de categorías (blanco/tinto, sí/no, excelente/bueno/malo, etc.), o un problema de **regresión**, donde el resultado es un valor numérico entre un infinito de posibles resultados. Los problemas de regresión suelen presentar resultados más discretos que los problemas de clasificación. 
+
+
+En este punto, si no estás familiarizado con los conceptos de *machine learning* se recomienda ver el [anexo I](#anexo1) para conocer las distintas etapas que tienen lugar en dichos procesos, así cómo conocer el significado de algunos elementos básicos para la comprensión de los modelos. De igual manera, puedes continuar leyendo y obtendrás una aproximación a modelos predictivos mediante ténicas de aprendizaje automático.  
+
+Contenido:
+
+1. [Definición del problema](#problema) .
+
+2. [Exploración y sumario de datos](#caracteristicas).
+
+3. [Correlaciones](#correlaciones).
+
+4. [Algoritmos de clasificación: División, ajuste y evaluación](#algoritmos).
+
+5. [¿Qué importancia otorga cada modelo a cada variable?](#importancia)
+
+6. [Comparativa de modelos](#metricas).
+
+[Anexo I: Etapas en un proceso de machine learning](#anexo1).
+
+[Anexo II: Dificultades habituales en el preprocesado](#anexo2).
+
+
+
+
+# 1. Definición del problema {#problema}
+
+En todo proceso de *machine learning* es necesario definir el problema y tener claro qué queremos predecir. En nuestro caso, se trata de un problema de clasificación. En concreto, queremos desarrollar distintos modelos que sean capaces de predecir si se trata de un vino tinto o un vino blanco dadas las características químicas del vino.
+Para ello, explotaremos un conjunto de datos con las características de 6497 vinos que hemos encontrado en la siguiente web : [https://www.kaggle.com/aleixdorca/wine-quality]
+
+```{r carga datos y nombres v., message=FALSE, warning=FALSE, include=FALSE}
+winequality <- read_csv("C:/Users/Usuario/Downloads/winequality.csv")
+
+#Ahora duplicamos el dataset porque realizaremos modificaciones sobre el dataset y, personalmente, quiero tener un dataset guardado como original por si tengo que comparar alguna modificación.
+original= winequality
+
+
+colnames(winequality) <- c("acidez_fija", "acidez_variable", "acido_citrico","azucar_residual", "cloruros","dioxido_azufre_libre",
+"dioxido_azufre_total","densidad", "pH","sulfatos", "alcohol","calidad", "bueno","color")   
+winequality$color= as.factor(winequality$color)
+winequality$bueno = as.factor(winequality$bueno)
+
+```
+
+
+# 2. Exploración y sumario de datos {#caracteristicas}
+
+Una vez hemos definido el problema, el siguiente paso es tratar de entender los datos. Para facilitar dicho proceso podemos hacernos preguntas cómo: ¿De qué datos disponemos? ¿Cuáles son las características de éstos? ¿Cómo se correlacionan las distintas variables? ¿Es necesario realizar alguna transformación a los datos? 
+
+Por ello, visualizamos la tabla de datos. Podemos filtrar por columnas, canviarlas de posición e incluso descargarnos los datos directamente.  
+
+
+```{r tabla, echo=FALSE}
+datatable(winequality,extensions = c('Buttons', 'ColReorder'), filter = "top", options = list(colReorder = TRUE,  pageLength = 8, dom = 'Bfrtip', buttons = c('copy', 'csv', 'excel', 'pdf', 'print'), scrollX = TRUE)) 
+```
+
+
+Podemos observar que se trata de un conjunto de datos de 6497 observaciones y 14 variables, 12 de ellas son numéricas y las otras dos son categóricas.
+
+También podemos advertir la media de cada variable, junto a su desvicación típica, su valor mínimo y máximo, sus cuantiles y si presentan datos ausentes o no. En este caso, ninguna variable presenta datos faltantes.
+```{r resumen, echo=FALSE}
+skim(winequality)
+```
+
+Observamos un pequeño histograma de las variables numéricas y un gráfico que muestra la frecuencia de las variables categóricas. En el caso de la variable "bueno" el 1 significa que dicho vino sí es considerado bueno, de lo contrario el valor asignado es 0.
+```{r peq histograma de las variables, echo=FALSE, message=FALSE, warning=FALSE, cache=FALSE}
+library(funModeling)
+plot_num(winequality)
+```
+
+```{r freq de las variables, echo=FALSE, message=FALSE, warning=FALSE}
+freq(winequality, plot=T)
+```
+A continuación podemos observar las diferencias en las características de los vinos blancos y los vinos rojos o tintos, primero mediante una tabla que resume la media de cada estadístico dependiendo del tipo de vino, y en segundo lugar mediante un diagrama de cajas de ambos grupos.
+
+```{r dif_colores, echo=FALSE, message=FALSE, warning=FALSE}
+dif_color <-
+  aggregate(original,
+            by = list(original$color),
+            FUN = mean)
+dif_color2= round(dif_color[2:14], digits= 3)
+dif_color= dif_color%>%dplyr::select(Group.1)
+dif_color= cbind(dif_color, dif_color2)
+
+datatable(dif_color, extensions =  'ColReorder', filter = "top", options = list(colReorder = TRUE,  scrollX = TRUE)) 
+```
+
+```{r boxplots, echo=FALSE, message=FALSE, warning=FALSE}
+library(cowplot)
+a=ggplot(data = winequality, aes(color, acidez_fija, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+b=ggplot(data = winequality, aes(color, acidez_variable, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+c=ggplot(data = winequality, aes(color, acido_citrico, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+d=ggplot(data = winequality, aes(color, azucar_residual, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+e=ggplot(data = winequality, aes(color, cloruros, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+f=ggplot(data = winequality, aes(color, dioxido_azufre_libre, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+g=ggplot(data = winequality, aes(color, dioxido_azufre_total, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+h=ggplot(data = winequality, aes(color, densidad, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+i=ggplot(data = winequality, aes(color, pH, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+j=ggplot(data = winequality, aes(color, sulfatos, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+k=ggplot(data = winequality, aes(color, alcohol, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+l=ggplot(data = winequality, aes(color, calidad, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+m=ggplot(data = winequality, aes(color, bueno, fill=color)) +  geom_boxplot(alpha=0.3)+  theme(legend.position="none", axis.title.x = element_blank())
+
+plot_grid(a,b,c,d, ncol=2, nrow=2)
+plot_grid(e,f,g,h, ncol=2, nrow=2)
+plot_grid(i,j,k,l, ncol=2, nrow=2)
+```
+Ahora presentamos una tabla de contingencia y su reresentación gráfica para analizar la asociación entre la variable color, que nos indica el tipo de vino (blanco o tinto), y la variable bueno.
+
+```{r tabla de contingencia, echo=FALSE, message=FALSE, warning=FALSE}
+xtabs(~ color + bueno, data = winequality)
+cross_plot(data=winequality, input=c("color"), target="bueno")
+```
+
+
+```{r eliminar objetos, message=FALSE, warning=FALSE, include=FALSE}
+rm(list = c("a","b","c","d","e","f","g","h","i","j","k","l","m"))
+```
+
+<!-- Igual que el chunk anterior pero con un código más sencillo y más limpio -->
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+library(DataExplorer)
+plot_boxplot(winequality, by="color", ncol=2, nrow=2, ggtheme = theme_minimal(), theme_config = list(
+  "plot.background" = element_rect(fill = "yellow"),
+  "aspect.ratio" = 1))
+```
+
+
+## 3. Correlaciones {#correlaciones}
+
+A continuación observamos la correlación entre las variables. Los tres asteriscos (***) indican que la correlación es significativa al 99% de confianza, mientras que dos representan un 95% y un asterisco indica un 90% de confianza. 
+
+
+```{r convertimos las columnas a numéricas, include=FALSE}
+winequality$color = as.numeric(winequality$color)
+winequality$bueno= as.numeric(winequality$bueno)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Análisis de correlación entre las variables numéricas o cuantitativas.
+numericas = winequality %>% dplyr::select(where(is.numeric))
+
+
+corrplot.mixed(round(
+  cor(numericas),1),
+  upper = "shade",
+  lower = "number",
+  tl.pos = "lt",
+  addCoef.col = "black",
+  number.cex = .6
+)
+
+#Una vez calculados los coeficientes de correlación, es conveniente ver su significancia y los gráficos d dispersión de la correlación entre las variables a través de la función chart.correlation().
+chart.Correlation(numericas, histogram = F, pch= 3)
+```
+
+Hemos observado una fuerte correlación entre las variables "calidad" y bueno", por lo que procedemos a eliminar ambas variables.
+```{r eliminar variable correlacionada, include=FALSE}
+winequality$bueno=NULL
+winequality$calidad= NULL
+```
+
+
+
+# 4. Algoritmos de clasificación: División, ajuste y evaluación {#algoritmos}
+
+Llegados a este punto, dividimos {#division} el conjunto de datos entre una muestra de entrenamiento, compuesta por el 70%, y una muestra de test, compuesta por el 30% restante. El método de partición para entrenar los algoritmos será un cross-validation de 5 conjuntos y una sola repetición.
+
+A continuación presentamos una pequeña explicación de los algoritmos usados, los parámetros {#parametros} específicos de cada uno de ellos y los resultados obtenidos. 
+
+
+```
+Si quieres profundizar en detalles técnicos puedes consultar el código en mi enlace de GitHub.
+```
+
+```{r include=FALSE}
+set.seed(155)
+winequality$color= as.factor(winequality$color)
+levels(winequality$color)= c("blanco", "rojo")
+# Índice de partición
+
+indice_particion=createDataPartition(winequality$color, p=0.7, list=F)
+
+# Muestras de entrenamiento y test
+entrenamiento = winequality [indice_particion,]
+test= winequality[-indice_particion,]
+```
+
+
+
+```{r echo=FALSE}
+# Hiperparámetros de caret
+fiveStats = function(...) c ( twoClassSummary(...), defaultSummary(...) )
+control <- trainControl( method = "repeatedcv", 
+                         number = 5,
+                         repeats = 1, 
+                         classProbs = TRUE, 
+                         summaryFunction = fiveStats,
+                         returnResamp = "final",
+                         allowParallel = TRUE )
+metrica <- "ROC"
+```
+
+
+## 4.1.Árbol de decisión
+
+Los árboles de decisión son modelos predictivos formados por reglas binarias (si/no) con las que se consigue repartir las observaciones en función de sus atributos y predecir así el valor de la variable respuesta.
+
+>Algoritmo usado: 'adaboost', donde tenemos que especificar el número de iteraciones (nIter).
+
+```{r include=FALSE}
+set.seed( 55 )
+
+clusterCPU <- makePSOCKcluster(detectCores()-1)
+registerDoParallel(clusterCPU)
+
+Grid_ada <-  expand.grid(nIter = c(200,350), method = c("adaboost"))
+
+mod_ada <- train(color ~ ., data = entrenamiento, 
+              method = "adaboost", 
+              metric = metrica, 
+              #preProc = c("center", "scale"), 
+              trControl = control,
+              tuneGrid = Grid_ada)
+
+stopCluster(clusterCPU)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(mod_ada)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+prediccion_ada <- predict( mod_ada, test )
+cf.gbm=confusionMatrix( prediccion_ada, test$color )
+cf.gbm
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+CrossTable(prediccion_ada, test$color , prop.chisq = FALSE, prop.c = FALSE, prop.r = TRUE)
+```
+
+    
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+roc_ada= roc(test$color,as.numeric(prediccion_ada))
+ggroc(roc_ada, aes="linetype",legacy.axes = TRUE, colour="green") +
+  geom_abline() +
+  theme_light()
+```
+
+
+
+## 4.2.Random forest
+
+Son modelos basados en la combinación de árboles de decisión independientes generados a partir de un vector de muestreo aleatorio que usa la misma distribución para todos los árboles de estudio. Consigue mejores resultados gracias a que genera un amplio número de árboles no correlacionados y posteriormente los promedia.
+
+
+>Algoritmo usado = 'cforest', válido para problemas de clasificación y regresión y dónde debemos configurar el número de predictores seleccionados aleatoriamente en cada árbol (mtry).
+
+```{r include=FALSE}
+set.seed( 55 )
+clusterCPU <- makePSOCKcluster(detectCores()-1)
+registerDoParallel(clusterCPU)
+
+Grid_rf <-  expand.grid(mtry=c(1:5))
+
+mod_rf <- train(color ~ ., data = entrenamiento, 
+              method = "cforest", 
+              metric = metrica, 
+              #preProc = c("center", "scale"), 
+              trControl = control,
+              tuneGrid = Grid_rf)
+
+stopCluster(clusterCPU)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(mod_rf)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+prediccion_rf <- predict( mod_rf, test )
+cf.gbm=confusionMatrix( prediccion_rf, test$color )
+cf.gbm
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+CrossTable(prediccion_rf, test$color , prop.chisq = FALSE, prop.c = FALSE, prop.r = TRUE)
+```
+
+    
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+roc_rf= roc(test$color,as.numeric(prediccion_rf))
+ggroc(roc_rf, aes="linetype",legacy.axes = TRUE, colour="green") +
+  geom_abline() +
+  theme_light()
+```
+
+
+## 4.3.Máquinas de vector soporte
+
+Es un algoritmo de aprendizaje supervisado que realiza un mapeo no lineal de los datos de entrenamiento para asignarlos a un espacio de mayor dimensión en el que puede realizarse una regresión lineal mediante funciones núcleo o kernel. La aplicación de Máquinas de Vectores Soporte para resolver tanto problemas de clasificación como de regresión se ha incrementado notablemente debido, fundamentalmente, a su alto rendimiento de forma general y su capacidad para modelar relaciones no lineales.
+
+>Algoritmo usado: 'svmRadial', dónde debemos ajustar el coste, un hiperparámetro que controla la penalización que se aplica a las clasificaciones erróneas cuando se entrena el modelo (C). Si su valor es alto, el modelo resultante es más flexible y se ajusta mejor a las observaciones de entrenamiento, pero con el riesgo de overfitting. También debemos asignar valor para sigma (sigma), que es el coeficiente del kernel radial.
+
+```{r include=FALSE}
+set.seed( 55 )
+clusterCPU <- makePSOCKcluster(detectCores()-1)
+registerDoParallel(clusterCPU)
+
+Grid_svm <-  expand.grid(sigma = c(0.0100, 0.0125,0.015,0.15), C = c(0.1,0.5,1))
+
+mod_svm <- train(color ~ ., data = entrenamiento, 
+              method = "svmRadial", 
+              metric = metrica, 
+              #preProc = c("center", "scale"), 
+              trControl = control,
+              tuneGrid = Grid_svm)
+
+stopCluster(clusterCPU)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(mod_svm)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+prediccion_svm <- predict( mod_svm, test )
+cf.gbm=confusionMatrix( prediccion_svm, test$color )
+cf.gbm
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+CrossTable(prediccion_svm, test$color , prop.chisq = FALSE, prop.c = FALSE, prop.r = TRUE)
+```
+
+    
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+roc_svm= roc(test$color,as.numeric(prediccion_svm))
+ggroc(roc_svm, aes="linetype",legacy.axes = TRUE, colour="green") +
+  geom_abline() +
+  theme_light()
+```
+
+
+## 4.4.Red neuronal
+
+Las redes neuronales son algoritmos de aprendizaje que tratan de emular el comportamiento del cerebro humano, recibiendo una información (capa de entrada) que es procesada y se transmite a las posteriores capas. Permite resolver problemas que no son linealmente separables. 
+En esta familia de algoritmos cobra gran importancia el concepto del Gradiente Descendente que se usa para optimizar la función objetivo, en concreto trata de encontrar el mínimo de la función de forma iterativa.
+
+>Algoritmo usado: 'mlpWeightDecayML'. Debemos definir el número de neuronas en cada capa oculta (layer) y la tasa de aprendizaje o tasa de variación de los pesos (decay).
+
+En esta versión se usan 2 capas ocultas y una tasa de aprendizaje, que controla la rapidez con la que el modelo se adapta al problema. Una tasa de aprendizaje demasiado grande puede resultar en oscilaciones demasiad elevadas durante el entrenamiento. Por el contrario, una tasa demasiado pequeña puede hacer que el modelo se atasque en una solución subóptima, o incluso que nunca llegue a converger.
+```{r message=FALSE, warning=FALSE, cache=T, include=FALSE}
+library(caret)
+library(parallelly)
+set.seed( 55 )
+clusterCPU <- makePSOCKcluster(detectCores()-1)
+registerDoParallel(clusterCPU)
+
+Grid_nn <-  expand.grid(layer1=c(1:10), layer2= c(0:4), layer3=0, decay= c(0.05,0.1,0.15))
+mod_nn <- train(color ~ ., data = entrenamiento, 
+              method = "mlpWeightDecayML", 
+              metric = "kappa", 
+              #preProc = c("center", "scale"), 
+              trControl = control,
+              tuneGrid = Grid_nn)
+
+stopCluster(clusterCPU)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(mod_nn)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+prediccion_nn <- predict( mod_nn, test )
+cf.gbm=confusionMatrix( prediccion_nn, test$color )
+cf.gbm
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+CrossTable(prediccion_nn, test$color , prop.chisq = FALSE, prop.c = FALSE, prop.r = TRUE)
+```
+
+    
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+roc_nn= roc(test$color,as.numeric(prediccion_nn))
+ggroc(roc_nn, aes="linetype",legacy.axes = TRUE, colour="green") +
+  geom_abline() +
+  theme_light()
+```
+
+
+
+
+## 4.5. Gradient Boosting
+
+El Gradient Boosting se fundamenta combinando el uso de algoritmos basados en boosting con los procedimientos de optimización del gradiente.
+
+El concepto de descenso del gradiente ha sido introducido en el apartado de la red neuronal. Por otra parte, el boosting es un método de clasificación que pertenece a las técnicas de ensemble o multiclasificadores, las cuáles son una combinación de dos o más clasificadores que, generalmente, proporciona estimaciones más robustas y eficientes. También se utilizan porque resuelven el problema de sobre-adaptación (overfitting) y es posible obtener buenos resultados con pocos datos.
+
+>Algoritmo usado: 'gbm'. Debemos decidir el número de iteraciones del algoritmo de boosting (n.trees). Cuanto mayor es el valor otorgado, menor es el error de entrenamiento, pero podemos caer en problemas de overfitting. También debemos definir la profundidad o divisiones de los árboles (interaction.depth). Asimismo, debemos controlar la influencia que tiene cada modelo sobre el conjunto de ensemble (shinkrage) y el número mínimo de observaciones que debe tener un nodo para ser dividido (n.minobsinnode).
+
+```{r include=FALSE}
+set.seed( 55 )
+clusterCPU <- makePSOCKcluster(detectCores()-1)
+registerDoParallel(clusterCPU)
+
+tune_grid <- expand.grid(n.trees = seq(from = 200, to = 500, by = 50),
+                         interaction.depth = c(1, 2, 3, 4),
+                         shrinkage = 0.1,
+                         n.minobsinnode = 10)
+mod_GBM <- train(entrenamiento[ , -c(12)], 
+                 entrenamiento$color,
+                 method = "gbm",
+                 metric = metrica,
+                 trControl = control,
+                 tuneGrid = tune_grid)
+stopCluster(clusterCPU)
+```
+
+
+
+```{r echo=FALSE}
+plot(mod_GBM)
+```
+
+
+```{r echo=FALSE}
+prediccion_GBM <- predict( mod_GBM, test )
+cf.gbm=confusionMatrix( prediccion_GBM, test$color )
+cf.gbm
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+CrossTable(prediccion_GBM, test$color , prop.chisq = FALSE, prop.c = FALSE, prop.r = TRUE)
+```
+
+    
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+roc_GBM= roc(test$color,as.numeric(prediccion_GBM))
+ggroc(roc_GBM, aes="linetype",legacy.axes = TRUE, colour="green") +
+  geom_abline() +
+  theme_light()
+```
+
+# 5. ¿Qué importancia otorga cada modelo a cada variable? {#importancia}
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(gbm)
+#plot(varImp(unlist(mod_ada)))
+plot(varImp(mod_rf), main ="Importancia de las variables según Random forest")
+#plot(varImp(mod_svm))
+#plot(varImp(mod_nn))
+plot(varImp(mod_GBM), main = "Importancia de las variables según Gradient Boosting")
+```
+
+
+# 6. Comparativa de modelos {#metricas}
+
+En este apartado realizamos una comparación de las distintas métricas en cada uno de los modelos realizados y observamos si existen diferencias significativas en los resultados de dichos modelos.
+```{r message=FALSE, warning=FALSE, include=FALSE}
+Result <- function ( modelos ){
+  n_modelos = length(modelos)
+  comparativa <- matrix(0, n_modelos, 7)
+  pred <- NULL
+
+  for (i in 1:n_modelos){
+    pred[[i]] <- predict(modelos[i], test, type="prob")
+    comparativa[i,1] = modelos[[i]]$method
+
+       comparativa[i,2] = modelos[[i]]$results[rownames(modelos[[i]]$bestTune), c("ROC")]
+       comparativa[i,3] = modelos[[i]]$results[rownames(modelos[[i]]$bestTune), c("Sens")]
+       comparativa[i,4] = modelos[[i]]$results[rownames(modelos[[i]]$bestTune), c("Spec")]
+       comparativa[i,5] = modelos[[i]]$results[rownames(modelos[[i]]$bestTune), c("Accuracy")]
+       comparativa[i,6] = modelos[[i]]$results[rownames(modelos[[i]]$bestTune), c("Kappa")]
+    
+    comparativa[i,7] = auc(roc(test$color,pred[[i]][[1]][,"blanco"]))
+  }
+  colnames(comparativa) <- c("Modelo", "AUC", "Sens", "Spec", "Accuracy", "Kappa", "AUC test")
+  return(comparativa)
+}
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+modelos <- list(mod_ada = mod_ada,
+                mod_rf = mod_rf, 
+                mod_nn = mod_nn,
+                mod_svm = mod_svm, 
+                mod_GBM= mod_GBM)
+
+
+Comparativa <- as.data.frame(Result (modelos))
+
+Comparativa$Modelo= as.factor(Comparativa$Modelo)
+Comparativa= Comparativa %>% mutate_if(is.character, as.numeric)
+
+Comparativa[2:7]= round(Comparativa[2:7], digits = 4 )
+datatable(Comparativa)
+```
+
+A continuación se presenta una tabla con los resultados de entrenamiento de cada modelo. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+resultados <- resamples(modelos)
+summary(resultados)
+```
+
+Seguidamente se muestra un diagrama de cajas con los resultados de cada modelo de entrenamiento.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dotplot(resultados)
+```
+
+Finalmente, mediante la corrección de Bonferroni se comprobará la hipótesis nula de que no existen diferencias de modelos. Aquellos cruces de modelos que presenten p-valores menores a 0.05 indicarán que sí existen diferencias entre ambos modelos.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+diferencias <- diff(resultados)
+summary(diferencias)
+```
+
+
+# Anexo I: Etapas en un proceso de *machine learning* {#anexo1}
+
+
+Conviene prestar atención a las siguientes etapas para llevar a cabo problemas de predicción mediante técnicas de *machine learning*:
+
+* **[Definir el problema](#problema)** . 
+
+* Explorar las **[características de los datos](#caracteristicas)** . 
+
+* **Preprocesado** {#preprocesado}: Consiste en realizar las transformaciones necesarias para que los datos puedan ser interpretados por el algoritmo. Dichas transformaciones dependerán de las características  observadas de los datos y de los algoritmos a usar. 
+En nuestro caso, no ha sido necesario aplicar ninguna transformación. Sin embargo, la realidad suele ser distinta, por lo que es habitual encontrarse ante conjuntos de datos donde las características de éstos nos obliguen a realizarles diversas manipulaciones con el fin de que puedan ser interpretados por los modelos. Suele tratarse de la parte más laboriosa y anárquica de un proceso de machine learning, ya que la adecuación y el orden de cada técnica dependerá de cada caso concreto. [En el anexo II](#anexo2) puedes encontrar algunas de las dificultades más habituales en el preprocesado.
+
+* **[División de la muestra](#division)** . Para poder evaluar la calidad predictiva de un modelo, es necesario examinarlo con un conjunto de datos independiente. Antes de ello, para entender la división de la muestra, debemos comprender las fases necesarias de un modelo de *Machine Learning*:
+
+  +  Fase de entrenamiento: Estimar los parámetros del modelo.
+
+  +  Fase de validación: Ajustar el modelo para obtener los mejores resultados basados en una métrica. Es decir, se decide cuál de las métricas se decide priorizar. 
+
+  +  Fase de test: Comprobar el comportamiento del modelo.
+
+En ocasiones, se entrena un modelo con un conjunto de datos distinto a los datos de validación. Sin embargo, generalmente se usa el mismo conjunto y se suele aplicar un sistema de validación llamado validación cruzada o *cross validated* [^1], que consiste en dividir el conjunto de entrenamiento en k particiones, repetir el procedimiento de entrenamiento y validación k veces, de forma que en cada una de ellas se entrene el modelo con k-1 particiones y se evalúe con la partición restante. 
+
+[^1]: Existen otros tipos de sistemas de validación que también acuden a estrategias de *resampling* con el fin de no usar un conjunto independiente de datos sino un subconjunto de los datos de entrenamiento. Ejemplos de ello son el *Leave-One-Out Cross-Validation* (LOOCV), el *repeated Cross validation*, *Boostraping*. Puedes ampliar en el anexo 4 de la siguiente página web: [https://www.cienciadedatos.net/documentos/41_machine_learning_con_r_y_caret#Anexos]
+
+Así, de incorporar métodos de validación basados en *resampling* [^2] el conjunto de datos se divide entre una muestra de entrenamiento y una muestra de test, de manera que cada observación solamente puede aparecer en una de las anteriores muestras. Generalmente la división es de un 70-80% los datos de entrenamiento y un 20-30% los datos de test.
+
+[^2]:En caso contrario, debemos dividir la muestra en 3 conjuntos: entrenamiento, validación y test. 
+
+* **[Definición de hiper-parámetros](#parametros)**  En este paso se define el método de *resampling*, explicado en el punto anterior, y el número de repeticiones. Ambas decisiones están relacionadas y se realizan atendiendo, principalmente, a 2 factores: el coste computacional y la reproducibilidad en la creación de particiones (tamaño de la muestra y desbalanceo de clases). También se definen los parámetros específicos de cada modelo. Existen 3 tipos de búsqueda de hiper-parámetros: 
+
+  +  Grid Search: Se especifican los valores que se quieren evaluar. Para realizar dicho método se requiere de un conocimiento previo y experiencia resolviendo problemas similiares con datos similares. 
+
+  +  Random search: Se realiza una búsqueda aleatoria dentro de un rango determinado. El problema de dicho método es que puede aumentar de manera considerable el coste computacional.
+
+  +  Adaptative Resampling: Se alcanza el óptimo después de un gradual ajuste probando distintos parámetros. No siempre funciona pero cuenta con la ventaja de un bajo coste computacional.
+
+* **[Métricas](#metricas)** : Evaluar la capacidad predictora de los algoritmos usados en la muestra de test. En general, para problemas de clasificación se usa accuracy y para problemas de regresión el RMSE. Estas son las métricas más comunes para problemas de clasificación:
+
+  +  **Accuracy**: La accuracy de un clasificador es el cociente entre el número de ejemplos que correctamente clasificados entre el total de instancias.
+
+  +  **Kappa**: Es una medida estadística cuyo rango es [-1,1] que determina la precisión del modelo ajustando su valor a la probabilidad de acierto esperado de la clase positiva. Es una medida más robusta para tratar con clases desbalanceadas, ya que descuenta la probabilidad de acertar al azar.
+  
+  + **Precision**: Es el porcentaje de aciertos entre los que se ha predicho la clase positiva. Es decir, los verdaderos positivos dividido los verdaderos positivos + los falsos positivos.
+
+  +  **Sensitivity / recall**: La sensibilidad es la probabilidad de clasificar correctamente una observación cuyo estado real sea la presencia de clase positiva / mayoritaria. En nuestro caso, la probabilidad de clasificar correctamente los vinos blancos.
+
+  +  **Spectificity**: La especificidad se define como la probabilidad de clasificar correctamente a un individuo cuyo estado real sea la ausencia de la condición. En el presente caso, la probabilidad de clasificar correctamente los vinos tintos.
+  
+  + **F1-score**:Se define como la media armónica de la precisión y la sensibilidad/recall. El objetivo del F1-score es combinar las métricas de precisión y recall en una sola métrica. Asimismo, el F1-score ha sido diseñado para funcionar bien con datos desequilibrados.
+  
+  +  **curvas ROC**: No es propiamente una métrica sino una representación gráfica del rendimiento de un modelo en un problema de clasificación binario. Nos da información acerca de cómo varía la relación de verdaderos positivos y verdaderos negativos dependiendo del corte de probabilidad usado.
+  
+  +  **AUC** (Area under the ROC curve): Es el área bajo la curva ROC. Este estadístico muestra la capacidad del modelo para distinguir ambas clases. 
+  
+  
+  + Además, la **matriz de confusión ** nos permite conocer la distribución del error a lo largo de las clases.
+
+* En problemas de regresión, las métricas a tener en cuenta son las siguientes:
+
+  +  **MSE**: *Mean squared error*. Es la media de los errores al cuadrado.
+
+  +  **RMSE**: *Root mean squared error*. Es lo mismo que la anterior pero no está en unidades al cuadrado, sinó que sus unidades son iguales a las de la variable respuesta, lo que facilita su interpretación.
+
+  +  **MAE**: *Mean absolute error*. La media de los errores en valor absoluto. Al no elevar el error al cuadrado, no penaliza tanto las grandes desviaciones, lo cual resulta beneficia aquellos modelos que predicen muy bien la mayoría de observaciones pero cometen grandes desviaciones en otras.
+
+# Anexo II: Dificultades habituales en el preprocesado {#anexo2}
+
+Como comentábamos en líneas anteriores, el [preprocesado](#preprocesado) suele ser la parte más larga de un proceso de aprendizaje automático, y aunque en esta ocasión no ha sido necesario realizar grandes transformaciones a los datos, lo normal es encontrarse ante conjuntos de datos donde las características de éstos nos obliguen a realizarles diversas manipulaciones para que puedan ser interpretados por los modelos. Estos casos pueden ser:
+
+
+* A veces, es adecuado aplicar transformaciones a las variables para que aporten mayor información al modelo o para que puedan ser interpretadas por éste --> Transformación a logaritmos cuando tenemos datos asimétricos, discretización de variables cuando queremos limitar los valores de una variable numérica, creación de *dummies* cuando queremos recoger la presencia o ausencia de una característica. Además, en la mayoría de veces es conveniente centrar y escalar los datos para los algoritmos de *machine learning*. 
+
+* Casos donde tenemos filas o columnas con datos ausentes --> Podemos realizar una imputación de datos (existen diversos métodos), no hacer nada (algunos modelos permiten valores NA), o bien proceder a la eliminación, ya sea de la variable que presenta muchos faltantes o de la observación. La adecuación de cada posibilidad depende del objetivo a resolver y de la calidad del dato.
+
+* Desbalanceo de clases: Casos donde se presentan muy pocos valores de un nivel, por lo que no tenemos datos suficientes para que en la fase de entrenamiento el modelo reconozca los patrones de dicha clase. Por ejemplo: Tenemos una base con datos sanitarios de pacientes y queremos desarrollar un modelo que clasifique al individuo dependiendo de si tiene cáncer o no. Imaginemos que tenemos una variable que recoge si el paciente se realizó algún chequeo en los últimos 6 meses, pero el 96% de los pacientes tienen un valor de "no"--> Equilibrado de la muestra mediante un aumento de la clase minoritaria o una disminución de la clase mayoritaria.
+
+* Tratamiento de valores atípicos --> Dependiendo del tamaño muestral y del objetivo perseguido, podemos eliminar dichos datos, sustituirlos por el valor máximo/mínimo admitido o dejarlos como están.
+
+* Selección de las variables: Las variables pueden ser descartadas por distintos motivos: Varianza próxima a 0, gran porcentaje de datos ausentes, insignificancia de la variable, multicolinealidad, etc.
+
+
+* Conjunto de datos con elevado número de variables --> Cuando disponemos de demasiadas variables puede resultar conveniente realizar técnicas de reducción de dimensiones cómo el análisis de componentes principales, el análisis factorial, etc. Dichas técnicas se basan en crear nuevas variables compuestas por la información de varias variables, reduciendo así el número de total de éstas. 
+
+
